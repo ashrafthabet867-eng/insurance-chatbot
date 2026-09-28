@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # تخصيص واجهة المستخدم وعنوان الهيئة
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'><a href='https://www.nosi.gov.eg' target='_blank' style='text-decoration: none; color: #1E3A8A;'>🏛️ الهيئة القومية للتأمين الاجتماعي</a></h1>", unsafe_allow_html=True)st.markdown("<h3 style='text-align: center; color: #4B5563;'>البوابة الذكية للرد على استفسارات وشكاوى المواطنين</h3>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'><a href='https://www.nosi.gov.eg' target='_blank' style='text-decoration: none; color: #1E3A8A;'>الهيئة القومية للتأمين الاجتماعي</a></h1>", unsafe_allow_html=True)
 st.write("---")
 
 # ترحيب بالمرتاد وإرشادات الاستخدام
