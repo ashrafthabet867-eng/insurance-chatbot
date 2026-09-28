@@ -7,7 +7,7 @@ from langgraph.prebuilt import create_react_agent
 # 1. إعدادات صفحة الويب والتصميم
 st.set_page_config(
     page_title="المساعد الذكي - الهيئة القومية للتأمين الاجتماعي",
-    page_icon="شفاف",
+    page_icon="شفاف.png",
     layout="centered"
 )
 
