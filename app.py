@@ -75,13 +75,13 @@ if prompt:
             )
 
             try:
-                # استخدام النموذج الحديث والمستقر llama-3.3-70b-versatile
+                # استخدام النموذج المعتمد والمتاح دائماً على منصة Groq
                 chat_completion = client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
-                    model="llama-3.3-70b-versatile",
+                    model="llama-3.1-8b-instant",
                     temperature=0.3,
                 )
                 reply = chat_completion.choices[0].message.content
