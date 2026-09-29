@@ -22,11 +22,11 @@ st.info(
     " إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والتأمينات."
 )
 
-# 2. إعداد مفتاح الـ API والعميل (Client) المباشر لـ Groq
+# 2. جلب المفتاح بأمان من Secrets أو استخدامه مباشرة
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
-    api_key = "gsk_mVXibF8ET8Bs3JJ8MG1QGwyddb3FYrtXB7WbDGcxUxh49v3G5u1Id"
+    api_key = "ضع_مفتاحك_الجديد_هنا_إذا_لم_تضعه_في_الـ_Secrets"
 
 client = Groq(api_key=api_key)
 
@@ -75,7 +75,6 @@ if prompt:
             )
 
             try:
-                # استخدام النموذج المعتمد والمتاح دائماً على منصة Groq
                 chat_completion = client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
