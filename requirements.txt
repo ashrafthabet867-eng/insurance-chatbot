@@ -1,8 +1,9 @@
 streamlit
+langchain
+langchain-core
 langchain-groq
 langchain-community
 langgraph
-duckduckgo-search>=6.0.0
 streamlit-mic-recorder
 gTTS
 pillow
