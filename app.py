@@ -28,9 +28,14 @@ st.info(
 # 2. إعداد مفتاح الـ API بأمان
 if "GROQ_API_KEY" in st.secrets:
   os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+  api_key = st.secrets["GROQ_API_KEY"]
+else:
+  # ضع مفتاحك التجريبي هنا كاحتياطي مؤقت
+  api_key = "gsk_mVXibF8ET8Bs3JJ8MG1QGwyddb3FYrtXB7WbDGcxUxh49v3G5u1Id"
+  os.environ["GROQ_API_KEY"] = api_key
 
-# تهيئة نموذج الدردشة مباشرة وبدون أخطاء
-chat = ChatGroq(model="llama3-70b-8192", temperature=0.3)
+# تهيئة نموذج الدردشة مع تمرير المفتاح صراحة لضمان عدم حدوث الخطأ
+chat = ChatGroq(model="llama3-70b-8192", temperature=0.3, groq_api_key=api_key)
 
 # 3. الشريط الجانبي للتسجيل الصوتي
 with st.sidebar:
