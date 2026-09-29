@@ -22,12 +22,8 @@ st.info(
     " إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والتأمينات."
 )
 
-# 2. جلب المفتاح بأمان من Secrets أو استخدامه مباشرة
-if "GROQ_API_KEY" in st.secrets:
-    api_key = st.secrets["GROQ_API_KEY"]
-else:
-    api_key = "ضع_مفتاحك_الجديد_هنا_إذا_لم_تضعه_في_الـ_Secrets"
-
+# 2. ضع مفتاحك الحقيقي مباشرة هنا لتجنب مشاكل الـ Secrets
+api_key = "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"
 client = Groq(api_key=api_key)
 
 # 3. الشريط الجانبي للتسجيل الصوتي
