@@ -75,18 +75,18 @@ if prompt:
             )
 
             try:
-                # استخدام عميل Groq مباشرة لتجنب أخطاء LangChain
+                # استخدام النموذج الحديث والمستقر llama-3.3-70b-versatile
                 chat_completion = client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
-                    model="llama3-8b-8192",
+                    model="llama-3.3-70b-versatile",
                     temperature=0.3,
                 )
                 reply = chat_completion.choices[0].message.content
             except Exception as e:
-                reply = f"عحدث خطأ أثناء الاتصال بالخادم: {e}"
+                reply = f"حدث خطأ أثناء الاتصال بالخادم: {e}"
 
             st.markdown(reply)
 
