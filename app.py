@@ -22,9 +22,17 @@ st.info(
     " إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والتأمينات."
 )
 
-# 2. ضع مفتاحك الحقيقي مباشرة هنا لتجنب مشاكل الـ Secrets
-api_key = "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"
-client = Groq(api_key=api_key)
+# 2. جلب مفتاح الـ API من إعدادات Streamlit Secrets بأمان
+try:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    st.error(
+        "⚠️ تنبيه: يرجى إضافة مفتاح GROQ_API_KEY في قسم Secrets لوحة تحكم"
+        " Streamlit Cloud."
+    )
+    st.stop()
+
+client = Groq(api_key=groq_api_key)
 
 # 3. الشريط الجانبي للتسجيل الصوتي
 with st.sidebar:
@@ -76,7 +84,7 @@ if prompt:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
-                    model="llama-3.1-8b-instant",
+                    model="llama3-8b-8192",
                     temperature=0.3,
                 )
                 reply = chat_completion.choices[0].message.content
