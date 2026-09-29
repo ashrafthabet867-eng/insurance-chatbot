@@ -2,8 +2,7 @@ from gtts import gTTS
 import os
 from streamlit_mic_recorder import speech_to_text
 import streamlit as st
-from langchain_groq import ChatGroq
-from langchain_core.messages import HumanMessage, SystemMessage
+from groq import Groq
 
 # 1. إعداد الصفحة
 st.set_page_config(
@@ -23,18 +22,13 @@ st.info(
     " إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والتأمينات."
 )
 
-# 2. جلب المفتاح بأمان من Secrets الخاصة بـ Streamlit
+# 2. إعداد مفتاح الـ API والعميل (Client) المباشر لـ Groq
 if "GROQ_API_KEY" in st.secrets:
-    os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
     api_key = st.secrets["GROQ_API_KEY"]
 else:
     api_key = "gsk_mVXibF8ET8Bs3JJ8MG1QGwyddb3FYrtXB7WbDGcxUxh49v3G5u1Id"
-    os.environ["GROQ_API_KEY"] = api_key
 
-# تهيئة نموذج الدردشة باستخدام نموذج llama3-8b-8192 المتاح والمعتمد
-chat = ChatGroq(
-    model="llama3-8b-8192", temperature=0.3, groq_api_key=api_key
-)
+client = Groq(api_key=api_key)
 
 # 3. الشريط الجانبي للتسجيل الصوتي
 with st.sidebar:
@@ -79,13 +73,21 @@ if prompt:
                 "ومستندة للقوانين. وعند ذكر الموقع الإلكتروني استخدم حصرياً:"
                 " www.nosi.gov.eg"
             )
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=prompt),
-            ]
 
-            response = chat.invoke(messages)
-            reply = response.content
+            try:
+                # استخدام عميل Groq مباشرة لتجنب أخطاء LangChain
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    model="llama3-8b-8192",
+                    temperature=0.3,
+                )
+                reply = chat_completion.choices[0].message.content
+            except Exception as e:
+                reply = f"عحدث خطأ أثناء الاتصال بالخادم: {e}"
+
             st.markdown(reply)
 
             # تحويل الرد إلى صوت
