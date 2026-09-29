@@ -31,9 +31,9 @@ else:
     api_key = "gsk_mVXibF8ET8Bs3JJ8MG1QGwyddb3FYrtXB7WbDGcxUxh49v3G5u1Id"
     os.environ["GROQ_API_KEY"] = api_key
 
-# تهيئة نموذج الدردشة بالاسم المستقر والمحدث
+# تهيئة نموذج الدردشة باستخدام نموذج llama3-8b-8192 المتاح والمعتمد
 chat = ChatGroq(
-    model="llama-3.1-8b-instant", temperature=0.3, groq_api_key=api_key
+    model="llama3-8b-8192", temperature=0.3, groq_api_key=api_key
 )
 
 # 3. الشريط الجانبي للتسجيل الصوتي
