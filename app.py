@@ -34,7 +34,7 @@ except Exception:
 os.environ["GROQ_API_KEY"] = api_key
 
 # تهيئة نموذج الدردشة مع تمرير المفتاح الصريح
-chat = ChatGroq(model="llama3-70b-8192", temperature=0.3, groq_api_key=api_key)
+chat = ChatGroq(model="llama-3.1-8b-instant", temperature=0.3, groq_api_key=api_key)
 
 # 3. الشريط الجانبي للتسجيل الصوتي
 with st.sidebar:
