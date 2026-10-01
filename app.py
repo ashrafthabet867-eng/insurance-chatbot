@@ -35,6 +35,7 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.header("⚙️ التحكم والخدمات")
     
+    # زر بدء محادثة جديدة
     if st.button("🗑️ بدء محادثة جديدة", type="primary", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
@@ -58,18 +59,16 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# استخدام أداة رفع منفصلة لكن بشكل مدمج وأنيق بجوار صندوق الكتابة أو فوقه مباشرة حسب رغبتك
-# (ملاحظة: st.chat_input في ستريمليت لا يدعم زر رفع الملفات بداخله مباشرة في النسخ الحالية، لذا نضعها فوقه مباشرة بتصميم مدمج)
-col1, col2 = st.columns([4, 1])
-with col1:
-    prompt = st.chat_input("اكتب استفسارك هنا أو اسأل عن المستند المرفق...")
-with col2:
-    uploaded_file = st.file_uploader("رفـع ملف", type=["png", "jpg", "jpeg", "pdf"], label_visibility="collapsed")
+# أداة رفع الصور والمستندات مباشرة في الواجهة
+uploaded_file = st.file_uploader("📂 ارفع صورة أو مستنداً للاستفسار عنه (اختياري):", type=["png", "jpg", "jpeg", "pdf"])
 
-# معالجة الإدخال عند كتابة نص أو رفع ملف
+# صندوق إدخال الاستفسارات
+prompt = st.chat_input("اكتب استفسارك هنا...")
+
 if prompt or uploaded_file:
-    user_content = prompt if prompt else "يرجى قراءة ومراجعة الملف المرفق للاستفسار عنه."
+    user_content = prompt if prompt else "يرجى قراءة ومراجعة الملف المرفق."
     
+    # حفظ ومعاينة الصورة أو الملف المرفق إن وجد
     image_to_display = None
     if uploaded_file:
         try:
