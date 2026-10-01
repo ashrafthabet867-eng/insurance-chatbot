@@ -41,20 +41,7 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# التحقق من وجود سؤال قادم من التسجيل الصوتي عبر Query Parameters
-query_params = st.query_params
-voice_prompt = query_params.get("voice_query", None)
-
-# صندوق إدخال الاستفسارات النصية التقليدي
-prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
-
-# إذا جاء نص من التسجيل الصوتي، نعتمده كأنه السؤال المدخل
-if voice_prompt:
-    prompt = voice_prompt
-    # مسح الـ query param حتى لا يتكرر السؤال عند كل تحديث للصفحة
-    st.query_params.clear()
-
-# زر التسجيل الصوتي المربوط بالمتصفح وإرسال النص عبر الرابط
+# زر التسجيل الصوتي المباشر وكتابة النص تلقائياً في خانة الدردشة
 st.markdown("### 🎙 التحدث الصوتي للمساعد الذكي:")
 
 voice_html = """
@@ -86,9 +73,27 @@ function startRecording() {
         const speechResult = event.results[0][0].transcript;
         statusText.innerText = "تم التقاط السؤال: " + speechResult;
         
-        // إعادة توجيه الصفحة لتمرير السؤال الصوتي مباشرة إلى بايثون عبر رابط المنصة
-        const currentUrl = window.parent.location.href.split('?')[0];
-        window.parent.location.href = currentUrl + "?voice_query=" + encodeURIComponent(speechResult);
+        // البحث عن حقل الإدخال الخاص بـ Streamlit وكتابة النص بداخله تلقائياً
+        const chatInput = window.parent.document.querySelector('textarea[data-baseweb="textarea"]') || window.parent.document.querySelector('input[type="text"]');
+        
+        if (chatInput) {
+            chatInput.value = speechResult;
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            
+            // الضغط تلقائياً على زر الإرسال أو محاكاة مفتاح Enter
+            setTimeout(() => {
+                const enterEvent = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true
+                });
+                chatInput.dispatchEvent(enterEvent);
+            }, 300);
+        } else {
+            statusText.innerText = "تم التقاط النص، يرجى كتابته يدوياً لعدم العثور على الحقل.";
+        }
     };
 
     recognition.onerror = function(event) {
@@ -101,8 +106,11 @@ function startRecording() {
 """
 components.html(voice_html, height=130)
 
+# صندوق إدخال الاستفسارات النصية والصوتية
+prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
+
 if prompt:
-    # حفظ وعرض السؤال (سواء تم إدخاله صوتی أو كتابةً)
+    # حفظ وعرض السؤال
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
