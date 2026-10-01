@@ -1,9 +1,5 @@
 streamlit
-langchain
-langchain-core
-langchain-groq
-langchain-community
-langgraph
+groq
 streamlit-mic-recorder
 gTTS
 pillow
