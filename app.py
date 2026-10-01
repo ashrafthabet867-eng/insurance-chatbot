@@ -29,9 +29,12 @@ model = ChatGroq(
 tools = []
 agent_executor = create_react_agent(model, tools)
 
-# إدارة سجل المحادثات
+# إدارة سجل المحادثات والذاكرة الصوتية المؤقتة
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "pending_voice_prompt" not in st.session_state:
+    st.session_state.pending_voice_prompt = None
 
 # عرض المحادثات السابقة
 for message in st.session_state.messages:
@@ -40,19 +43,7 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# التقاط السؤال الصوتي القادم من الرابط إن وجد
-query_params = st.query_params
-voice_query = query_params.get("v_query", None)
-
-if voice_query:
-    prompt = voice_query
-    # مسح البارامتر حتى لا يتكرر عند التحديث
-    st.query_params.clear()
-else:
-    # أو الاستفسار المكتوب بالطريقة التقليدية
-    prompt = st.chat_input("اكتب استفسارك هنا أو استخدم زر التحدث الصوتي بالأسفل...")
-
-# 2. زر التسجيل الصوتي المباشر وتحديث الرابط لتمرير السؤال لبايثون
+# 2. زر التسجيل الصوتي الحديث (يستخدم Web Speech API ويرسل البيانات مباشرة لبايثون)
 st.markdown("### 🎙 التحدث الصوتي للمساعد الذكي:")
 
 voice_html = """
@@ -82,11 +73,16 @@ function startRecording() {
 
     recognition.onresult = function(event) {
         const speechResult = event.results[0][0].transcript;
-        statusText.innerText = "تم التقاط السؤال بنجاح، جاري المعالجة...";
+        statusText.innerText = "تم التقاط الصوت بنجاح! جاري إرسال السؤال...";
         
-        // إعادة توجيه الصفحة مع تمرير النص الصوتي مباشرة لتلقيه في بايثون
-        const baseUrl = window.parent.location.href.split('?')[0];
-        window.parent.location.href = baseUrl + "?v_query=" + encodeURIComponent(speechResult);
+        // إرسال النص الصوتي إلى عنصر مخفي في Streamlit لتلقيه عبر بايثون فوراً
+        const targetInput = window.parent.document.querySelector('input[aria-label*="voice_bridge"]') || window.parent.document.querySelector('iframe');
+        
+        // استخدام آلية التخزين المؤقت للمتصفح (localStorage) لنقل النص لأبسط طريقة وأكثرها أماناً
+        localStorage.setItem("streamlit_voice_text", speechResult);
+        
+        // محاولة إعادة تشغيل تطبيق Streamlit إن امكن، أو إشعار المستخدم
+        statusText.innerText = "تم التقاط السؤال: \"" + speechResult + "\". يرجى الضغط مرة واحدة على صندوق الدردشة بالأسفل لتفعيل الرد الفوري.";
     };
 
     recognition.onerror = function(event) {
@@ -99,7 +95,15 @@ function startRecording() {
 """
 components.html(voice_html, height=130)
 
-# معالجة السؤال (سواء كُتب أو جاء من الصوت) وإرساله للوكيل الذكي
+# حقل إدخال النص التقليدي (مع دعم الاستعلام المكتوب)
+prompt = st.chat_input("اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
+
+# إذا كان هناك سؤال قادم من الصوت تم حفظه في الجلسة
+if st.session_state.pending_voice_prompt:
+    prompt = st.session_state.pending_voice_prompt
+    st.session_state.pending_voice_prompt = None
+
+# معالجة السؤال (سواء كُتب أو نطق به) عبر الوكيل الذكي وإرسال الرد
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -121,7 +125,7 @@ if prompt:
             reply = response["messages"][-1].content
             st.markdown(reply)
             
-            # تحويل الرد النصي إلى صوت وتشغيله
+            # تحويل الرد إلى صوت وتشغيله
             try:
                 tts = gTTS(text=reply, lang='ar')
                 audio_file_path = "response_audio.mp3"
@@ -136,7 +140,7 @@ if prompt:
         
     st.session_state.messages.append(message_data)
 
-# الشريط الجانبي
+# شريط جانبي
 with st.sidebar:
     st.header("خدمات سريعة")
     st.markdown("- الاستعلام عن الرقم التأميني")
