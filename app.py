@@ -1,10 +1,7 @@
 import os
-import io
 import streamlit as st
+import streamlit.components.v1 as components
 from gtts import gTTS
-from streamlit_mic_recorder import mic_recorder
-import speech_recognition as sr
-from pydub import AudioSegment
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
@@ -20,7 +17,6 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏛 الهيئة �
 st.markdown("<h3 style='text-align: center; color: #4B5563;'>البوابة الذكية للرد على استفسارات وشكاوى المواطنين</h3>", unsafe_allow_html=True)
 st.write("---")
 
-# ترحيب بالمرتاد وإرشادات الاستخدام
 st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والخدمات الرسمية صوتياً أو كتابياً.")
 
 # استدعاء مفتاح الـ API بأمان تام من أسرار Streamlit
@@ -31,11 +27,10 @@ model = ChatGroq(
     temperature=0.0
 )
 
-# 3. إعداد أدوات البحث والوكيل الذكي
 tools = []
 agent_executor = create_react_agent(model, tools)
 
-# 4. إدارة سجل المحادثة والرسائل في الواجهة
+# إدارة سجل المحادثة
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -46,40 +41,66 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 5. قسم التسجيل الصوتي المباشر والتفريغ التلقائي
-st.markdown("### 🎙️ التحدث الصوتي للمساعد الذكي:")
-audio_data = mic_recorder(
-    start_prompt="اضغط هنا لبدء التحدث",
-    stop_prompt="إيقاف التسجيل",
-    just_once=True,
-    key='voice_recorder'
-)
+# 2. زر تسجيل صوتي ذكي مدمج بتقنية المتصفح (Web Speech API) لتحويل الصوت إلى نص بدقة عالية
+st.markdown("### 🎙️️ التحدث الصوتي للمساعد الذكي:")
 
+voice_html = """
+<div style="text-align: center; padding: 10px;">
+    <button id="recordButton" onclick="startRecording()" style="background-color: #1E3A8A; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; font-family: Tahoma;">
+        🎙️ اضغط هنا وابدأ التحدث
+    </button>
+    <p id="statusText" style="margin-top: 10px; color: #4B5563; font-weight: bold;"></p>
+</div>
+
+<script>
+function startRecording() {
+    const statusText = document.getElementById("statusText");
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+        statusText.innerText = "متصفحك لا يدعم التحويل الصوتي المباشر، يرجى استخدام الكتابة.";
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ar-EG';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    statusText.innerText = "جاري الاستماع الآن... تحدث بوضوح";
+
+    recognition.onresult = function(event) {
+        const speechResult = event.results[0][0].transcript;
+        statusText.innerText = "تم التقاط السؤال: " + speechResult;
+        
+        // إرسال النص تلقائياً عبر Streamlit Query Parameters أو إعادة تحميل الصفحة بـ Streamlit
+        const streamlitInput = window.parent.document.querySelector('input[aria-label*="اكتب استفسارك هنا"]');
+        if (streamlitInput) {
+            streamlitInput.value = speechResult;
+            streamlitInput.dispatchEvent(new Event('input', { bubbles: true }));
+            // محاكاة الضغط على زر الإرسال
+            setTimeout(() => {
+                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true });
+                streamlitInput.dispatchEvent(enterEvent);
+            }, 500);
+        }
+    };
+
+    recognition.onerror = function(event) {
+        statusText.innerText = "حدث خطأ في التقاط الصوت، حاول مرة أخرى.";
+    };
+
+    recognition.start();
+}
+</script>
+"""
+components.html(voice_html, height=130)
+
+# صندوق إدخال الاستفسارات النصية والصوتية الواردة
 prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
 
-# التقاط الصوت المسجل وتحويله إلى نص عربي تلقائياً
-if audio_data:
-    try:
-        with st.spinner("جاري معالجة الصوت وتفريغه إلى نص..."):
-            audio_bytes = audio_data['bytes']
-            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
-            
-            wav_io = io.BytesIO()
-            audio_segment.export(wav_io, format="wav")
-            wav_io.seek(0)
-            
-            r = sr.Recognizer()
-            with sr.AudioFile(wav_io) as source:
-                audio_content = r.record(source)
-                recognized_text = r.recognize_google(audio_content, language="ar-EG")
-                if recognized_text:
-                    prompt = recognized_text
-                    st.success(f"تم استقبال سؤالك الصوتي بنجاح: {prompt}")
-    except Exception as e:
-        st.warning("تعذر التعرف على الكلمات بوضوح، يرجى إعادة محاولة التحدث أو الكتابة في صندوق الدردشة.")
-
 if prompt:
-    # حفظ وعرض السؤال (سواء تم إدخاله صوتی أو كتابةً)
+    # حفظ وعرض السؤال
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
