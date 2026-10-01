@@ -1,5 +1,7 @@
+import os
 from gtts import gTTS
-from groq import Groq
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_groq import ChatGroq
 import streamlit as st
 from streamlit_mic_recorder import speech_to_text
 
@@ -8,6 +10,7 @@ st.set_page_config(
     page_title="المساعد الذكي - الهيئة القومية للتأمين الاجتماعي",
     layout="centered",
 )
+
 st.markdown(
     "<h1 style='text-align: center; color: #1E3A8A;'><a"
     " href='https://www.nosi.gov.eg' target='_blank'"
@@ -16,19 +19,22 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.write("---")
+
 st.info(
     "أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي"
     " إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والتأمينات."
 )
 
-# 2. جلب المفتاح بأمان
+# 2. جلب المفتاح بأمان من Secrets أو وضعه مباشرة للتجربة
 try:
   api_key = st.secrets["GROQ_API_KEY"]
 except Exception:
-  api_key = "ضع_مفتاحك_الصحيح_هنا"
+  api_key = "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"  # ضع مفتاحاً صالحاً هنا للاختبار
 
-# إنشاء عميل Groq مباشرة
-client = Groq(api_key=api_key)
+os.environ["GROQ_API_KEY"] = api_key
+
+# تهيئة نموذج الدردشة مع تمرير المفتاح الصريح
+chat = ChatGroq(model="llama3-70b-8192", temperature=0.3, groq_api_key=api_key)
 
 # 3. الشريط الجانبي للتسجيل الصوتي
 with st.sidebar:
@@ -55,9 +61,7 @@ for message in st.session_state.messages:
 prompt = (
     voice_input
     if voice_input
-    else st.chat_input(
-        "اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)..."
-    )
+    else st.chat_input("اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
 )
 
 if prompt:
@@ -74,19 +78,12 @@ if prompt:
           " www.nosi.gov.eg"
       )
 
-      # إرسال الطلب مباشرة لـ Groq باستخدام النموذج الأحدث والمدعوم
-      try:
-        completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-        )
-        reply = completion.choices[0].message.content
-      except Exception as e:
-        reply = f"حدث خطأ أثناء الاتصال بالخادم: {e}"
+      messages = [
+          SystemMessage(content=system_prompt),
+          HumanMessage(content=prompt),
+      ]
+      response = chat.invoke(messages)
+      reply = response.content
 
       st.markdown(reply)
 
@@ -98,4 +95,4 @@ if prompt:
       except Exception:
         pass
 
-      st.session_state.messages.append({"role": "assistant", "content": reply})
+  st.session_state.messages.append({"role": "assistant", "content": reply})
