@@ -19,9 +19,8 @@ st.write("---")
 # ترحيب بالمرتاد وإرشادات الاستخدام
 st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات، الاشتراكات التأمينية، والخدمات الرسمية.")
 
-# 2. إعداد مفتاح الـ API ونموذج التشغيل المعتمد لديك
-os.environ["GROQ_API_KEY"] = "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"
-
+# استدعاء مفتاح الـ API بأمان من أسرار Streamlit
+os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 model = ChatGroq(
     model="qwen/qwen3.8-27b",
     temperature=0.0
