@@ -1,7 +1,10 @@
 import os
+import io
 import streamlit as st
 from gtts import gTTS
 from streamlit_mic_recorder import mic_recorder
+import speech_recognition as sr
+from pydub import AudioSegment
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
@@ -18,7 +21,7 @@ st.markdown("<h3 style='text-align: center; color: #4B5563;'>البوابة ال
 st.write("---")
 
 # ترحيب بالمرتاد وإرشادات الاستخدام
-st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والخدمات الرسمية.")
+st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والخدمات الرسمية صوتياً أو كتابياً.")
 
 # استدعاء مفتاح الـ API بأمان تام من أسرار Streamlit
 os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
@@ -43,24 +46,40 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 5. قسم مخصص لتسجيل الصوت بوضوح في الواجهة
-st.markdown("### 🎙️ التسجيل الصوتي المباشر:")
+# 5. قسم التسجيل الصوتي المباشر والتفريغ التلقائي
+st.markdown("### 🎙️ التحدث الصوتي للمساعد الذكي:")
 audio_data = mic_recorder(
-    start_prompt="اضغط هنا لبدء التسجيل الصوتي",
+    start_prompt="اضغط هنا لبدء التحدث",
     stop_prompt="إيقاف التسجيل",
     just_once=True,
     key='voice_recorder'
 )
 
-if audio_data:
-    st.audio(audio_data['bytes'])
-    st.success("تم استقبال رسالتك الصوتية بنجاح. (يمكنك كتابة السؤال في الأسفل أو متابعة الاستفسار).")
+prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
 
-# صندوق إدخال الاستفسارات النصية
-prompt = st.chat_input("اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
+# التقاط الصوت المسجل وتحويله إلى نص عربي تلقائياً
+if audio_data:
+    try:
+        with st.spinner("جاري معالجة الصوت وتفريغه إلى نص..."):
+            audio_bytes = audio_data['bytes']
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+            
+            wav_io = io.BytesIO()
+            audio_segment.export(wav_io, format="wav")
+            wav_io.seek(0)
+            
+            r = sr.Recognizer()
+            with sr.AudioFile(wav_io) as source:
+                audio_content = r.record(source)
+                recognized_text = r.recognize_google(audio_content, language="ar-EG")
+                if recognized_text:
+                    prompt = recognized_text
+                    st.success(f"تم استقبال سؤالك الصوتي بنجاح: {prompt}")
+    except Exception as e:
+        st.warning("تعذر التعرف على الكلمات بوضوح، يرجى إعادة محاولة التحدث أو الكتابة في صندوق الدردشة.")
 
 if prompt:
-    # حفظ وعرض سؤال المواطن
+    # حفظ وعرض السؤال (سواء تم إدخاله صوتی أو كتابةً)
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -82,7 +101,7 @@ if prompt:
             reply = response["messages"][-1].content
             st.markdown(reply)
             
-            # --- تحويل الرد النصي إلى صوت (Text-to-Speech) وتشغيله تلقائياً ---
+            # --- تحويل الرد النصي إلى صوت وتشغيله تلقائياً ---
             try:
                 tts = gTTS(text=reply, lang='ar')
                 audio_file_path = "response_audio.mp3"
