@@ -41,8 +41,21 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 2. زر تسجيل صوتي ذكي مدمج بتقنية المتصفح (Web Speech API) لتحويل الصوت إلى نص بدقة عالية
-st.markdown("### 🎙️️ التحدث الصوتي للمساعد الذكي:")
+# التحقق من وجود سؤال قادم من التسجيل الصوتي عبر Query Parameters
+query_params = st.query_params
+voice_prompt = query_params.get("voice_query", None)
+
+# صندوق إدخال الاستفسارات النصية التقليدي
+prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
+
+# إذا جاء نص من التسجيل الصوتي، نعتمده كأنه السؤال المدخل
+if voice_prompt:
+    prompt = voice_prompt
+    # مسح الـ query param حتى لا يتكرر السؤال عند كل تحديث للصفحة
+    st.query_params.clear()
+
+# زر التسجيل الصوتي المربوط بالمتصفح وإرسال النص عبر الرابط
+st.markdown("### 🎙 التحدث الصوتي للمساعد الذكي:")
 
 voice_html = """
 <div style="text-align: center; padding: 10px;">
@@ -73,17 +86,9 @@ function startRecording() {
         const speechResult = event.results[0][0].transcript;
         statusText.innerText = "تم التقاط السؤال: " + speechResult;
         
-        // إرسال النص تلقائياً عبر Streamlit Query Parameters أو إعادة تحميل الصفحة بـ Streamlit
-        const streamlitInput = window.parent.document.querySelector('input[aria-label*="اكتب استفسارك هنا"]');
-        if (streamlitInput) {
-            streamlitInput.value = speechResult;
-            streamlitInput.dispatchEvent(new Event('input', { bubbles: true }));
-            // محاكاة الضغط على زر الإرسال
-            setTimeout(() => {
-                const enterEvent = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true });
-                streamlitInput.dispatchEvent(enterEvent);
-            }, 500);
-        }
+        // إعادة توجيه الصفحة لتمرير السؤال الصوتي مباشرة إلى بايثون عبر رابط المنصة
+        const currentUrl = window.parent.location.href.split('?')[0];
+        window.parent.location.href = currentUrl + "?voice_query=" + encodeURIComponent(speechResult);
     };
 
     recognition.onerror = function(event) {
@@ -96,11 +101,8 @@ function startRecording() {
 """
 components.html(voice_html, height=130)
 
-# صندوق إدخال الاستفسارات النصية والصوتية الواردة
-prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
-
 if prompt:
-    # حفظ وعرض السؤال
+    # حفظ وعرض السؤال (سواء تم إدخاله صوتی أو كتابةً)
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
