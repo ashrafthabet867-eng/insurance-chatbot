@@ -1,6 +1,6 @@
 streamlit
+gtts
+streamlit-mic-recorder
 langchain-groq
 langchain-community
 langgraph
-duckduckgo-search>=6.0.0
-duckduckgo_search
