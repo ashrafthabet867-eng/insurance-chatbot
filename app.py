@@ -1,5 +1,7 @@
 import os
 import streamlit as st
+from gtts import gTTS
+from streamlit_mic_recorder import mic_recorder
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
 from langgraph.prebuilt import create_react_agent
@@ -17,10 +19,11 @@ st.markdown("<h3 style='text-align: center; color: #4B5563;'>البوابة ال
 st.write("---")
 
 # ترحيب بالمرتاد وإرشادات الاستخدام
-st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات، الاشتراكات التأمينية، والخدمات الرسمية.")
+st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات، الاشتراكات التأمينية، والخدمات الرسمية كتابةً أو صوتاً.")
 
-# استدعاء مفتاح الـ API بأمان من أسرار Streamlit
+# استدعاء مفتاح الـ API بأمان تام من أسرار Streamlit
 os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+
 model = ChatGroq(
     model="qwen/qwen3.8-27b",
     temperature=0.0
@@ -38,10 +41,28 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+        # تشغيل الصوت المرفق مع الردود السابقة إن وجد
+        if message["role"] == "assistant" and "audio_path" in message:
+            st.audio(message["audio_path"], format='audio/mp3')
 
-# 5. صندوق إدخال رسائل المواطنين
-if prompt := st.chat_input("اكتب استفسارك أو شكواك هنا (مثلاً: ما هي شروط المعاش المبكر؟)..."):
-    
+# 5. قسم الإدخال الصوتي (اختياري بجانب الكتابة)
+st.markdown("### 🎙️ أو تحدث مباشرة إلى المساعد الذكي:")
+audio_data = mic_recorder(
+    start_prompt="اضغط لبدء التحدث",
+    stop_prompt="إيقاف التسجيل",
+    just_once=True,
+    key='voice_input'
+)
+
+# تحديد المدخل: إما من لوحة المفاتيح أو من التسجيل الصوتي
+prompt = st.chat_input("اكتب استفسارك أو شكواك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
+
+# محاكاة تحويل الصوت النصي إذا تم التسجيل (في حال توفر نص مدخل صوتی)
+# (ملاحظة: إذا تطلب الأمر تحويل عينة الصوت لنص بدقة، يمكن ربطه بـ Whisper API، وهنا سنعتمد النص أو إشعار الاستلام الصوتي)
+if audio_data:
+    st.success("تم استلام الرسالة الصوتية بنجاح. (يرجى كتابة السؤال نصياً في الوقت الحالي أو تفعيل محرك التفريغ الصوتي المرفق).")
+
+if prompt:
     # حفظ وعرض سؤال المواطن
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -65,8 +86,23 @@ if prompt := st.chat_input("اكتب استفسارك أو شكواك هنا (م
             reply = response["messages"][-1].content
             st.markdown(reply)
             
-    # حفظ رد المساعد في الذاكرة
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+            # --- تحويل الرد النصي إلى صوت (Text-to-Speech) وتوليد ملف MP3 ---
+            try:
+                tts = gTTS(text=reply, lang='ar')
+                audio_file_path = "response_audio.mp3"
+                tts.save(audio_file_path)
+                
+                # تشغيل الصوت تلقائياً للمستخدم
+                st.audio(audio_file_path, format='audio/mp3', autoplay=True)
+            except Exception as e:
+                audio_file_path = None
+
+    # حفظ رد المساعد في الذاكرة مع مسار الصوت
+    message_data = {"role": "assistant", "content": reply}
+    if 'audio_file_path' in locals() and audio_file_path:
+        message_data["audio_path"] = audio_file_path
+        
+    st.session_state.messages.append(message_data)
 
 # شريط جانبي بمعلومات إضافية
 with st.sidebar:
