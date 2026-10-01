@@ -28,7 +28,7 @@ model = ChatGroq(
 )
 
 # 3. إعداد أدوات البحث والوكيل الذكي مع توجيه دقيق لدوره
-tools = [DuckDuckGoSearchRun(name="Search")]
+tools = []
 agent_executor = create_react_agent(model, tools)
 
 # 4. إدارة سجل المحادثة والرسائل في الواجهة
