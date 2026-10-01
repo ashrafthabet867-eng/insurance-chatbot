@@ -1,6 +1,8 @@
 streamlit
 gtts
 streamlit-mic-recorder
+SpeechRecognition
+pydub
 langchain-groq
 langchain-community
 langgraph
