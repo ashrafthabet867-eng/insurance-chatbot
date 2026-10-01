@@ -1,7 +1,10 @@
 import os
+import io
 import streamlit as st
 from gtts import gTTS
 from streamlit_mic_recorder import mic_recorder
+import speech_recognition as sr
+from pydub import AudioSegment
 from langchain_groq import ChatGroq
 from langchain_community.tools import DuckDuckGoSearchRun
 from langgraph.prebuilt import create_react_agent
@@ -45,7 +48,7 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 5. قسم الإدخال الصوتي (اختياري بجانب الكتابة)
+# 5. قسم الإدخال الصوتي والتفريغ التلقائي
 st.markdown("### 🎙️ أو تحدث مباشرة إلى المساعد الذكي:")
 audio_data = mic_recorder(
     start_prompt="اضغط لبدء التحدث",
@@ -54,13 +57,28 @@ audio_data = mic_recorder(
     key='voice_input'
 )
 
-# تحديد المدخل: إما من لوحة المفاتيح أو من التسجيل الصوتي
 prompt = st.chat_input("اكتب استفسارك أو شكواك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
 
-# محاكاة تحويل الصوت النصي إذا تم التسجيل (في حال توفر نص مدخل صوتی)
-# (ملاحظة: إذا تطلب الأمر تحويل عينة الصوت لنص بدقة، يمكن ربطه بـ Whisper API، وهنا سنعتمد النص أو إشعار الاستلام الصوتي)
+# تحويل الصوت المسجل إلى نص تلقائياً إذا تم التسجيل
 if audio_data:
-    st.success("تم استلام الرسالة الصوتية بنجاح. (يرجى كتابة السؤال نصياً في الوقت الحالي أو تفعيل محرك التفريغ الصوتي المرفق).")
+    try:
+        with st.spinner("جاري تفريغ الصوت وفهمه..."):
+            audio_bytes = audio_data['bytes']
+            audio_segment = AudioSegment.from_file(io.BytesIO(audio_bytes))
+            
+            wav_io = io.BytesIO()
+            audio_segment.export(wav_io, format="wav")
+            wav_io.seek(0)
+            
+            r = sr.Recognizer()
+            with sr.AudioFile(wav_io) as source:
+                audio_content = r.record(source)
+                recognized_text = r.recognize_google(audio_content, language="ar-EG")
+                if recognized_text:
+                    prompt = recognized_text
+                    st.success(f"عظيم! تم فهم سؤالك الصوتي: {prompt}")
+    except Exception as e:
+        st.warning("لم نتمكن من التقاط الكلمات بوضوح، يرجى إعادة المحاولة أو الكتابة في صندوق الدردشة أدناه.")
 
 if prompt:
     # حفظ وعرض سؤال المواطن
