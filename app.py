@@ -1,9 +1,10 @@
 import os
 import streamlit as st
-import streamlit.components.v1 as components
 from gtts import gTTS
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
+from streamlit_mic_recorder import mic_recorder
+import speech_recognition as sr
 
 # 1. إعدادات الصفحة
 st.set_page_config(
@@ -29,12 +30,9 @@ model = ChatGroq(
 tools = []
 agent_executor = create_react_agent(model, tools)
 
-# إدارة سجل المحادثات والذاكرة الصوتية المؤقتة
+# إدارة سجل المحادثات
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-if "pending_voice_prompt" not in st.session_state:
-    st.session_state.pending_voice_prompt = None
 
 # عرض المحادثات السابقة
 for message in st.session_state.messages:
@@ -43,67 +41,48 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 2. زر التسجيل الصوتي الحديث (يستخدم Web Speech API ويرسل البيانات مباشرة لبايثون)
+# 2. زر التسجيل الصوتي الأصلي المدمج (يعمل بصلاحيات المتصفح مباشرة دون عزل الـ iframe)
 st.markdown("### 🎙 التحدث الصوتي للمساعد الذكي:")
+col1, col2, col3 = st.columns([1, 2, 1])
 
-voice_html = """
-<div style="text-align: center; padding: 10px;">
-    <button id="recordButton" onclick="startRecording()" style="background-color: #1E3A8A; color: white; border: none; padding: 14px 28px; font-size: 16px; border-radius: 8px; cursor: pointer; font-family: Tahoma; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        🎙️ اضغط هنا وابدأ التحدث
-    </button>
-    <p id="statusText" style="margin-top: 12px; color: #1E3A8A; font-weight: bold; font-family: Tahoma;"></p>
-</div>
+with col2:
+    # استخدام مكتبة mic_recorder المباشرة لتسجيل الصوت بدقة
+    audio_data = mic_recorder(
+        start_prompt="🎙️ اضغط هنا وابدأ التحدث",
+        stop_prompt="⏹️ اضغط للإيقاف وإرسال الصوت",
+        just_once=False,
+        key='mic_recorder'
+    )
 
-<script>
-function startRecording() {
-    const statusText = document.getElementById("statusText");
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+prompt = None
+
+# إذا تم تسجيل صوت بنجاح، نقوم بتحويله إلى نص عبر مكتبة speech_recognition
+if audio_data:
+    audio_bytes = audio_data['bytes']
     
-    if (!SpeechRecognition) {
-        statusText.innerText = "متصفحك لا يدعم التحويل الصوتي المباشر، يرجى استخدام الكتابة.";
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'ar-EG';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    statusText.innerText = "جاري الاستماع الآن... تحدث بوضوح 🎙️";
-
-    recognition.onresult = function(event) {
-        const speechResult = event.results[0][0].transcript;
-        statusText.innerText = "تم التقاط الصوت بنجاح! جاري إرسال السؤال...";
+    # حفظ الملف الصوتى مؤقتاً لمعالجته
+    temp_audio_file = "temp_input_audio.wav"
+    with open(temp_audio_file, "wb") as f:
+        f.write(audio_bytes)
         
-        // إرسال النص الصوتي إلى عنصر مخفي في Streamlit لتلقيه عبر بايثون فوراً
-        const targetInput = window.parent.document.querySelector('input[aria-label*="voice_bridge"]') || window.parent.document.querySelector('iframe');
-        
-        // استخدام آلية التخزين المؤقت للمتصفح (localStorage) لنقل النص لأبسط طريقة وأكثرها أماناً
-        localStorage.setItem("streamlit_voice_text", speechResult);
-        
-        // محاولة إعادة تشغيل تطبيق Streamlit إن امكن، أو إشعار المستخدم
-        statusText.innerText = "تم التقاط السؤال: \"" + speechResult + "\". يرجى الضغط مرة واحدة على صندوق الدردشة بالأسفل لتفعيل الرد الفوري.";
-    };
+    r = sr.Recognizer()
+    try:
+        with sr.AudioFile(temp_audio_file) as source:
+            audio_content = r.record(source)
+            # التعرف على الصوت باللغة العربية
+            recognized_text = r.recognize_google(audio_content, language="ar-EG")
+            if recognized_text:
+                prompt = recognized_text
+    except Exception as e:
+        st.warning("تعذر التعرف على الكلمات بوضوح، يرجى المحاولة مرة أخرى أو الكتابة في الأسفل.")
 
-    recognition.onerror = function(event) {
-        statusText.innerText = "تعذر التعرف على الصوت بوضوح، حاول مرة أخرى.";
-    };
+# حقل الإدخال النصي التقليدي كخيار بديل أو مكمل
+text_prompt = st.chat_input("أو اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
 
-    recognition.start();
-}
-</script>
-"""
-components.html(voice_html, height=130)
+if text_prompt:
+    prompt = text_prompt
 
-# حقل إدخال النص التقليدي (مع دعم الاستعلام المكتوب)
-prompt = st.chat_input("اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
-
-# إذا كان هناك سؤال قادم من الصوت تم حفظه في الجلسة
-if st.session_state.pending_voice_prompt:
-    prompt = st.session_state.pending_voice_prompt
-    st.session_state.pending_voice_prompt = None
-
-# معالجة السؤال (سواء كُتب أو نطق به) عبر الوكيل الذكي وإرسال الرد
+# معالجة السؤال وإرساله للوكيل الذكي
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -125,7 +104,7 @@ if prompt:
             reply = response["messages"][-1].content
             st.markdown(reply)
             
-            # تحويل الرد إلى صوت وتشغيله
+            # تحويل الرد النصي إلى صوت وتشغيله
             try:
                 tts = gTTS(text=reply, lang='ar')
                 audio_file_path = "response_audio.mp3"
