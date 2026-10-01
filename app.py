@@ -1,23 +1,24 @@
 import os
 import streamlit as st
 from gtts import gTTS
+from streamlit_mic_recorder import mic_recorder
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
 # 1. إعدادات صفحة الويب والتصميم
 st.set_page_config(
     page_title="المساعد الذكي - الهيئة القومية للتأمين الاجتماعي",
-    page_icon="🏛️️",
+    page_icon="🏛",
     layout="centered"
 )
 
 # تخصيص واجهة المستخدم وعنوان الهيئة
-st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏛️️ الهيئة القومية للتأمين الاجتماعي</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏛 الهيئة القومية للتأمين الاجتماعي</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='text-align: center; color: #4B5563;'>البوابة الذكية للرد على استفسارات وشكاوى المواطنين</h3>", unsafe_allow_html=True)
 st.write("---")
 
 # ترحيب بالمرتاد وإرشادات الاستخدام
-st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات، الاشتراكات التأمينية، والخدمات الرسمية مع الرد الصوتي.")
+st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات المتعلقة بالمعاشات والخدمات الرسمية.")
 
 # استدعاء مفتاح الـ API بأمان تام من أسرار Streamlit
 os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
@@ -42,9 +43,23 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 5. صندوق إدخال الاستفسارات
-if prompt := st.chat_input("اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)..."):
-    
+# 5. قسم مخصص لتسجيل الصوت بوضوح في الواجهة
+st.markdown("### 🎙️ التسجيل الصوتي المباشر:")
+audio_data = mic_recorder(
+    start_prompt="اضغط هنا لبدء التسجيل الصوتي",
+    stop_prompt="إيقاف التسجيل",
+    just_once=True,
+    key='voice_recorder'
+)
+
+if audio_data:
+    st.audio(audio_data['bytes'])
+    st.success("تم استقبال رسالتك الصوتية بنجاح. (يمكنك كتابة السؤال في الأسفل أو متابعة الاستفسار).")
+
+# صندوق إدخال الاستفسارات النصية
+prompt = st.chat_input("اكتب استفسارك هنا (مثلاً: ما هي شروط المعاش المبكر؟)...")
+
+if prompt:
     # حفظ وعرض سؤال المواطن
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
