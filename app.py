@@ -16,8 +16,6 @@ st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏛 الهيئة �
 st.markdown("<h3 style='text-align: center; color: #4B5563;'>البوابة الذكية للرد على استفسارات وشكاوى المواطنين</h3>", unsafe_allow_html=True)
 st.write("---")
 
-st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات وقراءة المستندات والملفات المرفقة.")
-
 # إعداد مفتاح الـ API
 os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 
@@ -33,6 +31,25 @@ agent_executor = create_react_agent(model, tools)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# شريط جانبي للخدمات وزر محادثة جديدة
+with st.sidebar:
+    st.header("⚙️ التحكم والخدمات")
+    
+    # زر بدء محادثة جديدة
+    if st.button("🗑️ بدء محادثة جديدة", type="primary", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+        
+    st.write("---")
+    st.markdown("### خدمات سريعة")
+    st.markdown("- الاستعلام عن الرقم التأميني")
+    st.markdown("- شروط استحقاق المعاش")
+    st.markdown("- مواعيد صرف المعاشات")
+    st.write("---")
+    st.caption("جميع الحقوق محفوظة © الهيئة القومية للتأمين الاجتماعي 2026")
+
+st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات وقراءة المستندات والملفات المرفقة.")
+
 # عرض المحادثات السابقة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -42,7 +59,7 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# 2. أداة رفع الصور والمستندات مباشرة في الواجهة
+# أداة رفع الصور والمستندات مباشرة في الواجهة
 uploaded_file = st.file_uploader("📂 ارفع صورة أو مستنداً للاستفسار عنه (اختياري):", type=["png", "jpg", "jpeg", "pdf"])
 
 # صندوق إدخال الاستفسارات
@@ -99,12 +116,3 @@ if prompt or uploaded_file:
         assistant_message_data["audio_path"] = audio_file_path
         
     st.session_state.messages.append(assistant_message_data)
-
-# شريط جانبي للخدمات السريعة
-with st.sidebar:
-    st.header("خدمات سريعة")
-    st.markdown("- الاستعلام عن الرقم التأميني")
-    st.markdown("- شروط استحقاق المعاش")
-    st.markdown("- مواعيد صرف المعاشات")
-    st.write("---")
-    st.caption("جميع الحقوق محفوظة © الهيئة القومية للتأمين الاجتماعي 2026")
