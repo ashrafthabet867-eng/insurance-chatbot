@@ -50,7 +50,7 @@ with st.sidebar:
 
 st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات وقراءة المستندات والملفات المرفقة.")
 
-# عرض المحادثات السابقة
+# عرض المحادثات السابقة أولاً لتأخذ مساحتها الطبيعية في الأعلى
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if "image" in message and message["image"]:
@@ -59,7 +59,9 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# تصميم شريط الإدخال السفلي المدمج (زر الإرفاق بجانب صندوق الكتابة)
+# فصل منطق الإدخال السفلي (زر الرفع وصندوق الدردشة في الأسفل تماماً)
+st.write("") 
+
 col_input, col_upload = st.columns([5, 1])
 
 with col_upload:
@@ -119,3 +121,4 @@ if prompt or uploaded_file:
         assistant_message_data["audio_path"] = audio_file_path
         
     st.session_state.messages.append(assistant_message_data)
+    st.rerun()
