@@ -50,7 +50,7 @@ with st.sidebar:
 
 st.info("أهلاً بك عزيزي المواطن. أنا المساعد الذكي الرقمي للهيئة، ومهمتي هي إجابتك على كافة الاستفسارات وقراءة المستندات والملفات المرفقة.")
 
-# عرض المحادثات السابقة أولاً لتأخذ مساحتها الطبيعية في الأعلى
+# عرض المحادثات السابقة من الجلسة
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if "image" in message and message["image"]:
@@ -59,9 +59,8 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# فصل منطق الإدخال السفلي (زر الرفع وصندوق الدردشة في الأسفل تماماً)
+# تصميم شريط الإدخال السفلي (زر الرفع بجانب صندوق الدردشة)
 st.write("") 
-
 col_input, col_upload = st.columns([5, 1])
 
 with col_upload:
@@ -70,6 +69,7 @@ with col_upload:
 with col_input:
     prompt = st.chat_input("اكتب استفسارك هنا أو اسأل عن الملف المرفق...")
 
+# معالجة المدخلات مرة واحدة فقط عند إرسال رسالة جديدة
 if prompt or uploaded_file:
     user_content = prompt if prompt else "يرجى قراءة ومراجعة الملف المرفق."
     
@@ -82,15 +82,15 @@ if prompt or uploaded_file:
             image_to_display = None
 
     # تخزين وعرض رسالة المستخدم
-    message_data = {"role": "user", "content": user_content, "image": image_to_display}
-    st.session_state.messages.append(message_data)
+    user_message_data = {"role": "user", "content": user_content, "image": image_to_display}
+    st.session_state.messages.append(user_message_data)
     
     with st.chat_message("user"):
         if image_to_display:
             st.image(image_to_display, width=250)
         st.markdown(user_content)
 
-    # معالجة الرد عبر المساعد الذكي
+    # معالجة الرد عبر المساعد الذكي وتخزينه في الجلسة دون تكرار الحلقات
     with st.chat_message("assistant"):
         with st.spinner("جاري مراجعة البيانات واللوائح للإجابة بدقة..."):
             
@@ -108,17 +108,18 @@ if prompt or uploaded_file:
             st.markdown(reply)
             
             # تحويل الرد النصي إلى صوت وتشغيله
+            audio_file_path = None
             try:
                 tts = gTTS(text=reply, lang='ar')
                 audio_file_path = "response_audio.mp3"
                 tts.save(audio_file_path)
                 st.audio(audio_file_path, format='audio/mp3', autoplay=True)
             except Exception as e:
-                audio_file_path = None
+                pass
 
+    # تخزين رد المساعد في السجل النهائي مرة واحدة
     assistant_message_data = {"role": "assistant", "content": reply}
-    if 'audio_file_path' in locals() and audio_file_path:
+    if audio_file_path:
         assistant_message_data["audio_path"] = audio_file_path
         
     st.session_state.messages.append(assistant_message_data)
-    st.rerun()
