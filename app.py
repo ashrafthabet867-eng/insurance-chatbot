@@ -33,7 +33,7 @@ if "messages" not in st.session_state:
 
 # شريط جانبي للخدمات وزر محادثة جديدة
 with st.sidebar:
-    st.header("⚙️ التحكم والخدمات")
+    st.header("⚙️️ التحكم والخدمات")
     
     # زر بدء محادثة جديدة
     if st.button("🗑 بدء محادثة جديدة", type="primary", use_container_width=True):
@@ -59,17 +59,13 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# تصميم شريط الإدخال السفلي (زر الرفع بجانب صندوق الدردشة)
-st.write("") 
-col_input, col_upload = st.columns([5, 1])
+# صندوق رفع الملفات بشكل مدمج في الأسفل فوق خانة الكتابة مباشرة لضمان عدم تشتت الشاشة
+uploaded_file = st.file_uploader("📎 إرفاق مستند أو صورة للاستفسار (اختياري)", type=["png", "jpg", "jpeg", "pdf"])
 
-with col_upload:
-    uploaded_file = st.file_uploader("رفـع ملف", type=["png", "jpg", "jpeg", "pdf"], label_visibility="collapsed")
+# صندوق إدخال النص الرئيسي في أسفل الصفحة
+prompt = st.chat_input("اكتب استفسارك هنا...")
 
-with col_input:
-    prompt = st.chat_input("اكتب استفسارك هنا أو اسأل عن الملف المرفق...")
-
-# معالجة المدخلات مرة واحدة فقط عند إرسال رسالة جديدة
+# معالجة المدخلات عند الإرسال
 if prompt or uploaded_file:
     user_content = prompt if prompt else "يرجى قراءة ومراجعة الملف المرفق."
     
@@ -90,7 +86,7 @@ if prompt or uploaded_file:
             st.image(image_to_display, width=250)
         st.markdown(user_content)
 
-    # معالجة الرد عبر المساعد الذكي وتخزينه في الجلسة دون تكرار الحلقات
+    # معالجة الرد عبر المساعد الذكي
     with st.chat_message("assistant"):
         with st.spinner("جاري مراجعة البيانات واللوائح للإجابة بدقة..."):
             
@@ -117,7 +113,7 @@ if prompt or uploaded_file:
             except Exception as e:
                 pass
 
-    # تخزين رد المساعد في السجل النهائي مرة واحدة
+    # تخزين رد المساعد في السجل النهائي
     assistant_message_data = {"role": "assistant", "content": reply}
     if audio_file_path:
         assistant_message_data["audio_path"] = audio_file_path
