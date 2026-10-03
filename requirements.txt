@@ -1,8 +1,6 @@
-streamlit
-gtts
-streamlit-mic-recorder
-SpeechRecognition
-pydub
+streamlit>=1.52
+groq
+gTTS
 langchain-groq
-langchain-community
-langgraph
+langchain-core
+pypdf
