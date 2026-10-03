@@ -36,7 +36,7 @@ with st.sidebar:
     st.header("⚙️ التحكم والخدمات")
     
     # زر بدء محادثة جديدة
-    if st.button("🗑️️ بدء محادثة جديدة", type="primary", use_container_width=True):
+    if st.button("🗑 بدء محادثة جديدة", type="primary", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
         
@@ -59,11 +59,14 @@ for message in st.session_state.messages:
         if message["role"] == "assistant" and "audio_path" in message:
             st.audio(message["audio_path"], format='audio/mp3')
 
-# أداة رفع الصور والمستندات مباشرة في الواجهة
-uploaded_file = st.file_uploader("📂 ارفع صورة أو مستنداً للاستفسار عنه (اختياري):", type=["png", "jpg", "jpeg", "pdf"])
+# تصميم شريط الإدخال السفلي المدمج (زر الإرفاق بجانب صندوق الكتابة)
+col_input, col_upload = st.columns([5, 1])
 
-# صندوق إدخال الاستفسارات
-prompt = st.chat_input("اكتب استفسارك هنا...")
+with col_upload:
+    uploaded_file = st.file_uploader("رفـع ملف", type=["png", "jpg", "jpeg", "pdf"], label_visibility="collapsed")
+
+with col_input:
+    prompt = st.chat_input("اكتب استفسارك هنا أو اسأل عن الملف المرفق...")
 
 if prompt or uploaded_file:
     user_content = prompt if prompt else "يرجى قراءة ومراجعة الملف المرفق."
