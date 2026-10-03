@@ -36,7 +36,7 @@ with st.sidebar:
     st.header("⚙️ التحكم والخدمات")
     
     # زر بدء محادثة جديدة
-    if st.button("🗑️ بدء محادثة جديدة", type="primary", use_container_width=True):
+    if st.button("🗑️️ بدء محادثة جديدة", type="primary", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
         
