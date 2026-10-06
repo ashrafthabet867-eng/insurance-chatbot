@@ -189,6 +189,7 @@ def strip_think(text: str) -> str:
 
 def make_tts(text: str):
     """تحويل الرد إلى صوت في الذاكرة بدون ملفات على القرص."""
+    text = re.sub(r"\[\d+\]|\u27e6\u061f\u27e7", "", text)  # citations and unverified markers
     clean = re.sub(r"[*_#`>|~\-]+", " ", text)[:MAX_TTS_CHARS]
     try:
         buf = io.BytesIO()

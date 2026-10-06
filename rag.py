@@ -8,7 +8,7 @@ from collections import Counter
 
 MAX_CHARS = 1200      # أقصى طول للجزء الواحد
 OVERLAP = 150
-MIN_SCORE = 4.0       # أقل درجة تشابه مقبولة (اضبطها حسب تجربتك)
+MIN_SCORE = 6.0       # أقل درجة تشابه مقبولة (اضبطها حسب تجربتك)
 
 _TASHKEEL = re.compile(r"[\u0617-\u061A\u064B-\u0652\u0640]")
 _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -116,6 +116,8 @@ class Index:
                 for t in q
                 if t in tf
             )
+            if self.chunks[i]["source"].startswith("key_facts"):
+                s *= 1.5  # hand-verified facts win over OCR text with the same score
             scored.append((s, i))
         scored.sort(reverse=True)
         return [(self.chunks[i], s) for s, i in scored[:k] if s >= min_score]
