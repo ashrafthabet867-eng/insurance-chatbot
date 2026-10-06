@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 from pypdf import PdfReader
 
-from rag import load_index
+from rag import load_index, tokenize
 
 # ----------------------------------------------------------------------
 # الإعدادات (تأكد من أسماء النماذج في قائمة Groq الحالية)
@@ -41,7 +41,9 @@ SYSTEM_PROMPT = (
     "6. إذا أُرفق مستند من المواطن، اعتمد على محتواه إلى جانب النصوص المرجعية.\n"
     "7. إذا ظهر الرمز ⟦؟⟧ مكان رقم في النصوص المرجعية فهذا رقم لم يتم التحقق منه: "
     "لا تذكر أي رقم أو نسبة أو مبلغ أو تاريخ مكانه ولا تخمّنه، وقل صراحة إن الرقم "
-    "الدقيق يجب مراجعته في النص الرسمي للقانون أو في مكتب التأمينات."
+    "الدقيق يجب مراجعته في النص الرسمي للقانون أو في مكتب التأمينات.\n"
+    "8. النصوص المرجعية التي مصدرها key_facts موثّقة يدويًا من النص الرسمي: "
+    "اعتمد عليها في الأرقام والنسب بدل أي نص آخر فيه ⟦؟⟧."
 )
 
 # ----------------------------------------------------------------------
@@ -197,11 +199,14 @@ def make_tts(text: str):
 
 
 def retrieve():
-    """يبحث بآخر سؤالين للمستخدم ليفهم أسئلة المتابعة مثل: والشرط التاني؟"""
+    """يبحث بالسؤال الحالي؛ ولو كان قصيرًا (سؤال متابعة) يضيف السؤال السابق."""
     if index is None:
         return []
     user_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
-    return index.search(" ".join(user_msgs[-2:]), k=TOP_K)
+    query = user_msgs[-1]
+    if len(tokenize(query)) < 3 and len(user_msgs) > 1:
+        query = user_msgs[-2] + " " + query
+    return index.search(query, k=TOP_K)
 
 
 def format_context(hits) -> str:
