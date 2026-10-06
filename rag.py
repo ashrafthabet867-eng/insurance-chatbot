@@ -8,7 +8,7 @@ from collections import Counter
 
 MAX_CHARS = 1200      # أقصى طول للجزء الواحد
 OVERLAP = 150
-MIN_SCORE = 2.0       # أقل درجة تشابه مقبولة (اضبطها حسب تجربتك)
+MIN_SCORE = 4.0       # أقل درجة تشابه مقبولة (اضبطها حسب تجربتك)
 
 _TASHKEEL = re.compile(r"[\u0617-\u061A\u064B-\u0652\u0640]")
 _DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
