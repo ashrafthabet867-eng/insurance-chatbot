@@ -10,6 +10,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 from pypdf import PdfReader
 
+from rag import load_index
+
 # ----------------------------------------------------------------------
 # الإعدادات (تأكد من أسماء النماذج في قائمة Groq الحالية)
 # ----------------------------------------------------------------------
@@ -20,17 +22,26 @@ MAX_HISTORY = 10          # عدد آخر الرسائل المرسلة للنم
 MAX_PDF_PAGES = 10
 MAX_DOC_CHARS = 8000
 MAX_TTS_CHARS = 1500
+TOP_K = 4                 # عدد النصوص المرجعية المرسلة للنموذج
+KNOWLEDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge")
 
 SYSTEM_PROMPT = (
     "أنت مساعد ذكي يجيب عن استفسارات المواطنين بخصوص المعاشات والتأمينات "
-    "الاجتماعية في مصر. التزم بالقواعد التالية:\n"
+    "الاجتماعية في مصر. ستصلك مع كل سؤال «نصوص مرجعية» مرقمة [1] [2] ... "
+    "التزم بالقواعد التالية:\n"
     "1. أجب بالعربية بشكل رسمي ومختصر وواضح.\n"
-    "2. استند فقط إلى معلومات تعرفها بدقة من اللوائح والقوانين المعمول بها. "
-    "لا تخترع أرقامًا أو نسبًا أو شروطًا.\n"
-    "3. إذا لم تكن متأكدًا، قل ذلك صراحة وانصح المواطن بمراجعة أقرب مكتب "
-    "تأمينات أو الخط الساخن للهيئة.\n"
-    "4. للأسئلة المتعلقة بحالة شخصية محددة، وضّح أن القرار النهائي للهيئة.\n"
-    "5. إذا أُرفق مستند، اعتمد على محتواه في الإجابة."
+    "2. في الأسئلة عن الأحكام والشروط والمبالغ والمواعيد، اعتمد على النصوص "
+    "المرجعية فقط، واذكر رقم المصدر بين أقواس مربعة بعد كل معلومة مثل [1]. "
+    "لا تخترع أرقامًا أو نسبًا أو شروطًا أو أرقام مواد.\n"
+    "3. إذا لم تحتوِ النصوص المرجعية على الإجابة، قل صراحة إنك لم تجد ذلك "
+    "في المصادر المتاحة، وانصح المواطن بمراجعة أقرب مكتب تأمينات أو الخط "
+    "الساخن للهيئة. لا تجب من ذاكرتك في هذه الحالة.\n"
+    "4. للتحيات والأسئلة العامة عن المساعد نفسه، أجب مباشرة دون مصادر.\n"
+    "5. للأسئلة المتعلقة بحالة شخصية محددة، وضّح أن القرار النهائي للهيئة.\n"
+    "6. إذا أُرفق مستند من المواطن، اعتمد على محتواه إلى جانب النصوص المرجعية.\n"
+    "7. إذا ظهر الرمز ⟦؟⟧ مكان رقم في النصوص المرجعية فهذا رقم لم يتم التحقق منه: "
+    "لا تذكر أي رقم أو نسبة أو مبلغ أو تاريخ مكانه ولا تخمّنه، وقل صراحة إن الرقم "
+    "الدقيق يجب مراجعته في النص الرسمي للقانون أو في مكتب التأمينات."
 )
 
 # ----------------------------------------------------------------------
@@ -65,6 +76,14 @@ def get_clients():
 
 chat_model, vision_model, stt_client = get_clients()
 
+
+@st.cache_resource
+def get_index():
+    return load_index(KNOWLEDGE_DIR)
+
+
+index = get_index()
+
 # ----------------------------------------------------------------------
 # حالة الجلسة
 # ----------------------------------------------------------------------
@@ -78,6 +97,11 @@ with st.sidebar:
         st.rerun()
 
     read_aloud = st.toggle("🔊 قراءة الرد بصوت مسموع", value=True)
+
+    if index is None:
+        st.warning("قاعدة المعرفة فارغة: أضف ملفات القانون (txt/pdf) في مجلد knowledge.")
+    else:
+        st.caption(f"📚 قاعدة المعرفة: {len(index.chunks)} جزءًا قانونيًا")
 
     st.write("---")
     st.markdown("### خدمات سريعة")
@@ -172,11 +196,34 @@ def make_tts(text: str):
         return None
 
 
-def build_llm_messages():
+def retrieve():
+    """يبحث بآخر سؤالين للمستخدم ليفهم أسئلة المتابعة مثل: والشرط التاني؟"""
+    if index is None:
+        return []
+    user_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    return index.search(" ".join(user_msgs[-2:]), k=TOP_K)
+
+
+def format_context(hits) -> str:
+    if not hits:
+        return "(لم يتم العثور على نصوص ذات صلة في قاعدة المعرفة.)"
+    return "\n\n".join(
+        f"[{i}] ({c['source']} - {c['label']})\n{c['text']}"
+        for i, (c, _) in enumerate(hits, 1)
+    )
+
+
+def build_llm_messages(context: str):
     msgs = [SystemMessage(content=SYSTEM_PROMPT)]
-    for m in st.session_state.messages[-MAX_HISTORY:]:
+    history = st.session_state.messages[-MAX_HISTORY:]
+    for i, m in enumerate(history):
         content = m.get("llm_content", m["content"])
-        msgs.append(HumanMessage(content=content) if m["role"] == "user" else AIMessage(content=content))
+        if m["role"] == "user":
+            if i == len(history) - 1:  # السؤال الحالي فقط يأخذ النصوص المرجعية
+                content += f"\n\n--- النصوص المرجعية ---\n{context}"
+            msgs.append(HumanMessage(content=content))
+        else:
+            msgs.append(AIMessage(content=content))
     return msgs
 
 
@@ -187,6 +234,11 @@ def render_message(m, autoplay=False):
         st.markdown(m["content"])
         if m.get("audio"):
             st.audio(m["audio"], format="audio/mp3", autoplay=autoplay)
+        if m.get("sources"):
+            with st.expander(f"📚 المصادر ({len(m['sources'])})"):
+                for i, s in enumerate(m["sources"], 1):
+                    st.markdown(f"**[{i}] {s['source']} — {s['label']}** (تشابه: {s['score']:.1f})")
+                    st.caption(s["text"][:400] + ("..." if len(s["text"]) > 400 else ""))
 
 
 # ----------------------------------------------------------------------
@@ -244,18 +296,24 @@ if chat_value:
     render_message(user_msg)
 
     # 3) رد المساعد
-    with st.chat_message("assistant"):
-        with st.spinner("جاري إعداد الإجابة..."):
-            try:
-                reply = strip_think(chat_model.invoke(build_llm_messages()).content)
-            except Exception:
-                reply = "عذرًا، حدث خطأ مؤقت. برجاء المحاولة مرة أخرى."
-        st.markdown(reply)
-
+    with st.spinner("جاري البحث في النصوص القانونية وإعداد الإجابة..."):
+        hits = retrieve()
+        try:
+            reply = strip_think(
+                chat_model.invoke(build_llm_messages(format_context(hits))).content
+            )
+        except Exception:
+            reply = "عذرًا، حدث خطأ مؤقت. برجاء المحاولة مرة أخرى."
         audio_bytes = make_tts(reply) if read_aloud else None
-        if audio_bytes:
-            st.audio(audio_bytes, format="audio/mp3", autoplay=True)
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": reply, "audio": audio_bytes}
-    )
+    assistant_msg = {
+        "role": "assistant",
+        "content": reply,
+        "audio": audio_bytes,
+        "sources": [
+            {"source": c["source"], "label": c["label"], "text": c["text"], "score": s}
+            for c, s in hits
+        ],
+    }
+    st.session_state.messages.append(assistant_msg)
+    render_message(assistant_msg, autoplay=True)
