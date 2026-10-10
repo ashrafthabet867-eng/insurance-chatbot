@@ -16,7 +16,7 @@ from rag import load_index, tokenize
 # الإعدادات (تأكد من أسماء النماذج في قائمة Groq الحالية)
 # ----------------------------------------------------------------------
 CHAT_MODEL = "qwen/qwen3.8-27b"
-VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+VISION_MODEL = "qwen/qwen3.8-27b"
 STT_MODEL = "whisper-large-v3"
 MAX_HISTORY = 10          # عدد آخر الرسائل المرسلة للنموذج
 MAX_PDF_PAGES = 10
@@ -45,6 +45,20 @@ SYSTEM_PROMPT = (
     "8. النصوص المرجعية التي مصدرها key_facts موثّقة يدويًا من النص الرسمي: "
     "اعتمد عليها في الأرقام والنسب بدل أي نص آخر فيه ⟦؟⟧."
 )
+
+ANSWER_MODES = {
+    "مختصرة": (
+        "نمط الإجابة: مختصر. أجب في 3 إلى 5 أسطر كحد أقصى، وابدأ بالإجابة المباشرة دون مقدمة "
+        "أو تكرار للسؤال، واذكر رقم المصدر [n]. لا تسرد الشروط والاستثناءات كاملة؛ وإن كان "
+        "هناك شروط أو استثناءات مهمة فاذكرها في جملة واحدة وقل إن التفصيل متاح باختيار "
+        "«مفصلة» من الشريط الجانبي."
+    ),
+    "مفصلة": (
+        "نمط الإجابة: مفصّل. ابدأ بخلاصة من سطر واحد، ثم اشرح الشروط والخطوات والأرقام "
+        "والاستثناءات الواردة في النصوص المرجعية بنقاط منظمة، واذكر رقم المادة والمصدر [n] "
+        "لكل معلومة. لا تضف أي معلومة غير موجودة في النصوص المرجعية."
+    ),
+}
 
 # ----------------------------------------------------------------------
 # إعداد الصفحة
@@ -99,6 +113,7 @@ with st.sidebar:
         st.rerun()
 
     read_aloud = st.toggle("🔊 قراءة الرد بصوت مسموع", value=True)
+    answer_mode = st.radio("📝 نمط الإجابة", list(ANSWER_MODES), index=0, horizontal=True)
 
     if index is None:
         st.warning("قاعدة المعرفة فارغة: أضف ملفات القانون (txt/pdf) في مجلد knowledge.")
@@ -219,8 +234,8 @@ def format_context(hits) -> str:
     )
 
 
-def build_llm_messages(context: str):
-    msgs = [SystemMessage(content=SYSTEM_PROMPT)]
+def build_llm_messages(context: str, mode: str):
+    msgs = [SystemMessage(content=SYSTEM_PROMPT + "\n\n" + ANSWER_MODES[mode])]
     history = st.session_state.messages[-MAX_HISTORY:]
     for i, m in enumerate(history):
         content = m.get("llm_content", m["content"])
@@ -306,7 +321,7 @@ if chat_value:
         hits = retrieve()
         try:
             reply = strip_think(
-                chat_model.invoke(build_llm_messages(format_context(hits))).content
+                chat_model.invoke(build_llm_messages(format_context(hits), answer_mode)).content
             )
         except Exception:
             reply = "عذرًا، حدث خطأ مؤقت. برجاء المحاولة مرة أخرى."
