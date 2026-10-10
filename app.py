@@ -63,14 +63,50 @@ ANSWER_MODES = {
 # ----------------------------------------------------------------------
 # إعداد الصفحة
 # ----------------------------------------------------------------------
+APP_TITLE = "المساعد الذكي للهيئة القومية للتأمين الاجتماعي"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def find_logo():
+    """الشعار: ارفع صورتك باسم logo.png (أو logo.jpg) بجانب app.py."""
+    for name in ("logo.png", "logo.jpg", "logo.jpeg"):
+        path = os.path.join(BASE_DIR, name)
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def logo_html(height=60):
+    path = find_logo()
+    if not path:
+        return "🏛 "
+    mime = "image/png" if path.endswith(".png") else "image/jpeg"
+    with open(path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    return (f"<img src='data:{mime};base64,{b64}' "
+            f"style='height:{height}px; vertical-align:middle; margin-right:12px;'>")
+
+
+def page_icon():
+    path = find_logo()
+    if path:
+        try:
+            from PIL import Image
+            return Image.open(path)
+        except Exception:
+            pass
+    return "🏛"
+
+
 st.set_page_config(
-    page_title="المساعد الذكي - التأمين الاجتماعي",
-    page_icon="🏛",
+    page_title=APP_TITLE,
+    page_icon=page_icon(),
     layout="centered",
 )
 
 st.markdown(
-    "<h1 style='text-align: center; color: #1E3A8A;'>🏛 المساعد الذكي للتأمين الاجتماعي</h1>",
+    f"<h1 style='text-align: center; color: #1E3A8A; font-size: 2rem; line-height: 1.6;'>"
+    f"{logo_html()}{APP_TITLE}</h1>",
     unsafe_allow_html=True,
 )
 st.markdown(
