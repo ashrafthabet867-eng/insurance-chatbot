@@ -15,7 +15,10 @@ from rag import load_index, tokenize
 # ----------------------------------------------------------------------
 # الإعدادات (تأكد من أسماء النماذج في قائمة Groq الحالية)
 # ----------------------------------------------------------------------
-CHAT_MODEL = "qwen/qwen3.8-27b"
+CHAT_MODELS = {
+    "Qwen 3.8 (سريع، جيد بالعربية)": ("qwen/qwen3.8-27b", {}),
+    "GPT-OSS 120B (أقوى في الفهم والاستدلال)": ("openai/gpt-oss-120b", {"reasoning_effort": "medium"}),
+}
 VISION_MODEL = "qwen/qwen3.8-27b"
 STT_MODEL = "whisper-large-v3"
 MAX_HISTORY = 10          # عدد آخر الرسائل المرسلة للنموذج
@@ -124,13 +127,18 @@ os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 
 @st.cache_resource
 def get_clients():
-    chat = ChatGroq(model=CHAT_MODEL, temperature=0.0)
     vision = ChatGroq(model=VISION_MODEL, temperature=0.0)
     stt = Groq()
-    return chat, vision, stt
+    return vision, stt
 
 
-chat_model, vision_model, stt_client = get_clients()
+@st.cache_resource
+def get_chat_model(label):
+    model_id, extra = CHAT_MODELS[label]
+    return ChatGroq(model=model_id, temperature=0.0, model_kwargs=extra)
+
+
+vision_model, stt_client = get_clients()
 
 
 @st.cache_resource
@@ -153,6 +161,7 @@ with st.sidebar:
         st.rerun()
 
     read_aloud = st.toggle("🔊 قراءة الرد بصوت مسموع", value=True)
+    model_label = st.selectbox("🧠 النموذج", list(CHAT_MODELS), index=0)
     answer_mode = st.radio("📝 نمط الإجابة", list(ANSWER_MODES), index=0, horizontal=True)
 
     if index is None:
@@ -363,7 +372,7 @@ if chat_value:
         hits = retrieve()
         try:
             reply = strip_think(
-                chat_model.invoke(build_llm_messages(format_context(hits), answer_mode)).content
+                get_chat_model(model_label).invoke(build_llm_messages(format_context(hits), answer_mode)).content
             )
         except Exception:
             reply = "عذرًا، حدث خطأ مؤقت. برجاء المحاولة مرة أخرى."
