@@ -135,7 +135,10 @@ def get_clients():
 @st.cache_resource
 def get_chat_model(label):
     model_id, extra = CHAT_MODELS[label]
-    return ChatGroq(model=model_id, temperature=0.0, model_kwargs=extra)
+    try:
+        return ChatGroq(model=model_id, temperature=0.0, **extra)
+    except Exception:
+        return ChatGroq(model=model_id, temperature=0.0)
 
 
 vision_model, stt_client = get_clients()
@@ -162,6 +165,7 @@ with st.sidebar:
 
     read_aloud = st.toggle("🔊 قراءة الرد بصوت مسموع", value=True)
     model_label = st.selectbox("🧠 النموذج", list(CHAT_MODELS), index=0)
+    dev_mode = st.checkbox("🛠 إظهار تفاصيل الأخطاء (للمطوّر)", value=False)
     answer_mode = st.radio("📝 نمط الإجابة", list(ANSWER_MODES), index=0, horizontal=True)
 
     if index is None:
@@ -370,11 +374,18 @@ if chat_value:
     # 3) رد المساعد
     with st.spinner("جاري البحث في النصوص القانونية وإعداد الإجابة..."):
         hits = retrieve()
-        try:
-            reply = strip_think(
-                get_chat_model(model_label).invoke(build_llm_messages(format_context(hits), answer_mode)).content
-            )
-        except Exception:
+        llm_messages = build_llm_messages(format_context(hits), answer_mode)
+        reply, used_model, errors = None, None, []
+        for label in [model_label] + [m for m in CHAT_MODELS if m != model_label]:
+            try:
+                candidate = strip_think(get_chat_model(label).invoke(llm_messages).content)
+                if not candidate.strip():
+                    raise ValueError("empty reply from the model")
+                reply, used_model = candidate, label
+                break
+            except Exception as e:
+                errors.append(f"{label} -> {type(e).__name__}: {str(e)[:400]}")
+        if reply is None:
             reply = "عذرًا، حدث خطأ مؤقت. برجاء المحاولة مرة أخرى."
         audio_bytes = make_tts(reply) if read_aloud else None
 
@@ -389,3 +400,6 @@ if chat_value:
     }
     st.session_state.messages.append(assistant_msg)
     render_message(assistant_msg, autoplay=True)
+    if dev_mode and errors:
+        st.warning("تفاصيل الخطأ (تظهر لك فقط):" + (f" استُخدم نموذج بديل: {used_model}" if used_model else ""))
+        st.code("\n\n".join(errors), language="text")
