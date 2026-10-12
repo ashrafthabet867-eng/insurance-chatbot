@@ -25,7 +25,8 @@ MAX_HISTORY = 10          # عدد آخر الرسائل المرسلة للنم
 MAX_PDF_PAGES = 10
 MAX_DOC_CHARS = 8000
 MAX_TTS_CHARS = 1500
-TOP_K = 8                 # عدد النصوص المرجعية المرسلة للنموذج
+TOP_K = 4                 # عدد النصوص المرجعية المرسلة للنموذج
+MIN_REL_SCORE = 0.5       # أي مصدر درجته أقل من نصف أعلى درجة يُستبعد
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge")
 
 SYSTEM_PROMPT = (
