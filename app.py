@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import os
 import re
 
@@ -18,6 +19,7 @@ from rag import load_index, tokenize
 CHAT_MODELS = {
     "Qwen 3.8 (سريع، جيد بالعربية)": ("qwen/qwen3.8-27b", {}),
     "GPT-OSS 120B (أقوى في الفهم والاستدلال)": ("openai/gpt-oss-120b", {"reasoning_effort": "medium"}),
+    "GPT-OSS 120B (استدلال عميق، أبطأ)": ("openai/gpt-oss-120b", {"reasoning_effort": "high"}),
 }
 VISION_MODEL = "qwen/qwen3.8-27b"
 STT_MODEL = "whisper-large-v3"
@@ -25,8 +27,11 @@ MAX_HISTORY = 10          # عدد آخر الرسائل المرسلة للنم
 MAX_PDF_PAGES = 10
 MAX_DOC_CHARS = 8000
 MAX_TTS_CHARS = 1500
-TOP_K = 4                 # عدد النصوص المرجعية المرسلة للنموذج
-MIN_REL_SCORE = 0.5       # أي مصدر درجته أقل من نصف أعلى درجة يُستبعد
+ANALYSIS_TOP_K = 10         # عدد النصوص في نمط تحليل الحالة
+TOP_K = 8                 # عدد المرشّحات التي يبحث فيها قبل الانتقاء
+MAX_SOURCES = 4           # أقصى عدد مصادر يُرسل للنموذج في الأنماط العادية
+REL_RATIO = 0.6           # يُبقي فقط المصادر التي درجتها 60% على الأقل من أفضل مصدر
+MIN_COVERAGE = 0.5        # ويشترط وجود نصف كلمات السؤال على الأقل في المصدر
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge")
 
 SYSTEM_PROMPT = (
@@ -48,8 +53,10 @@ SYSTEM_PROMPT = (
     "الدقيق يجب مراجعته في النص الرسمي للقانون أو في مكتب التأمينات.\n"
     "8. النصوص المرجعية التي مصدرها key_facts موثّقة يدويًا من النص الرسمي: "
     "اعتمد عليها في الأرقام والنسب بدل أي نص آخر فيه ⟦؟⟧.\n"
-    "9. انقل ما في النصوص المرجعية فقط: لا تستنتج ولا تفسّر ولا تضف عبارات توضيحية من "
-    "عندك (مثل «ويشمل كذا» أو «لا يوجد كذا» أو «أي أن...») ما لم تكن مكتوبة في النص.\n"
+    "9. فرّق دائمًا بين ما هو منقول من النصوص المرجعية وما هو استنباط منك: لا تقدّم استنباطك "
+    "على أنه نص، ولا تضف معلومة واقعية (رقمًا أو نسبة أو شرطًا أو رقم مادة) غير موجودة في "
+    "النصوص المرجعية. ويُسمح بالاستنباط المنطقي من النصوص بشرط أن تسبقه كلمة «استنتاج:» "
+    "وأن تذكر المواد التي بنيت عليها.\n"
     "10. عند ذكر رقم مادة، وضّح هل هي من «القانون» (المصدر law_148_2019) أم من «اللائحة "
     "التنفيذية» (المصدر regulation_2437_2021)، لأن لكل منهما ترقيمًا مستقلًا."
 )
@@ -64,7 +71,19 @@ ANSWER_MODES = {
     "مفصلة": (
         "نمط الإجابة: مفصّل. ابدأ بخلاصة من سطر واحد، ثم اشرح الشروط والخطوات والأرقام "
         "والاستثناءات الواردة في النصوص المرجعية بنقاط منظمة، واذكر رقم المادة والمصدر [n] "
-        "لكل معلومة. لا تضف أي معلومة غير موجودة في النصوص المرجعية."
+        "لكل معلومة. لا تضف أي معلومة غير موجودة في النصوص المرجعية، وإن احتجت إلى استنباط "
+        "فاكتبه في فقرة منفصلة تبدأ بـ«استنتاج:»."
+    ),
+    "تحليل حالة": (
+        "نمط الإجابة: تحليل حالة. المطلوب تطبيق النصوص على حالة المواطن بخطوات استدلال واضحة، "
+        "بهذا الهيكل:\n"
+        "أولًا — ما ينص عليه القانون: المواد ذات الصلة وما تقوله بنقاط مع رقم المصدر [n]، دون إضافة.\n"
+        "ثانيًا — التطبيق على حالتك: استنبط النتيجة خطوة بخطوة من النصوص ومن بيانات المواطن، "
+        "واذكر المعادلة والأرقام التي استخدمتها، واكتب «استنتاج:» قبل كل خطوة هي استنباط منك.\n"
+        "ثالثًا — ما ينقصني: إن كانت بيانات ضرورية غير مذكورة (كالعمر أو مدة الاشتراك أو الأجر) "
+        "فاذكرها واطلبها بدل افتراضها. وإن كان الحساب يحتاج جدولًا أو رقمًا غير موجود في النصوص "
+        "المرجعية فاذكر ذلك صراحة ولا تخمّن.\n"
+        "رابعًا — تنبيه: النتيجة تقدير استرشادي وليست قرارًا رسميًا من الهيئة."
     ),
 }
 
@@ -270,15 +289,82 @@ def make_tts(text: str):
         return None
 
 
-def retrieve():
-    """يبحث بالسؤال الحالي؛ ولو كان قصيرًا (سؤال متابعة) يضيف السؤال السابق."""
-    if index is None:
-        return []
+def current_query() -> str:
+    """السؤال الحالي؛ ولو كان قصيرًا (سؤال متابعة) يضيف السؤال السابق."""
     user_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
     query = user_msgs[-1]
     if len(tokenize(query)) < 3 and len(user_msgs) > 1:
         query = user_msgs[-2] + " " + query
-    return index.search(query, k=TOP_K)
+    return query
+
+
+def select_hits(hits, query):
+    """مصادر قليلة وعالية التطابق: درجة قريبة من الأفضل + تغطية كلمات السؤال."""
+    if not hits:
+        return []
+    top = hits[0][1]
+    kept = [(c, s) for c, s in hits
+            if s >= REL_RATIO * top and index.coverage(query, c) >= MIN_COVERAGE]
+    return kept[:MAX_SOURCES]
+
+
+def retrieve():
+    if index is None:
+        return []
+    query = current_query()
+    return select_hits(index.search(query, k=TOP_K), query)
+
+
+AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+
+def numbers_in_text(text, drop_markers=False):
+    t = text.translate(AR_DIGITS)
+    t = re.sub(r"(?<=\d)[,\u060c\u066c](?=\d{3}(?!\d))", "", t)
+    if drop_markers:
+        t = re.sub(r"\[\d+\]", " ", t)  # أرقام المصادر
+        t = re.sub(r"(?m)^\s*(?:[-*•]\s*)?\*{0,2}\d+\s*[.)\-]\s", " ", t)  # ترقيم القوائم
+    return set(re.findall(r"\d+(?:\.\d+)?", t))
+
+
+def unsupported_numbers(reply, context):
+    """أرقام وردت في الإجابة ولا توجد في النصوص المرجعية."""
+    return sorted(numbers_in_text(reply, True) - numbers_in_text(context), key=lambda x: (len(x), x))
+
+
+def plan_queries(question: str, model) -> list:
+    """يطلب من النموذج استعلامات بحث قانونية تغطي كل ما تحتاجه الإجابة (شروط، حساب، استثناءات)."""
+    prompt = (
+        "حلّل سؤال المواطن التالي، ثم اكتب من 3 إلى 5 استعلامات بحث قصيرة بلغة قانونية رسمية "
+        "تغطي كل المواد التي قد يحتاجها الجواب (شروط الاستحقاق، طريقة الحساب، الاستثناءات، "
+        "الحدود). أعد JSON فقط بهذا الشكل: {\"queries\": [\"...\", \"...\"]}\n\nالسؤال: " + question
+    )
+    try:
+        out = strip_think(model.invoke([HumanMessage(content=prompt)]).content)
+        data = json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+        qs = [q.strip() for q in data.get("queries", []) if isinstance(q, str) and q.strip()]
+        return qs[:5]
+    except Exception:
+        return []
+
+
+def merge_hits(result_lists, limit):
+    best = {}
+    for hits in result_lists:
+        for chunk, score in hits:
+            key = (chunk["source"], chunk["label"], chunk["text"][:60])
+            if key not in best or score > best[key][1]:
+                best[key] = (chunk, score)
+    return sorted(best.values(), key=lambda x: -x[1])[:limit]
+
+
+def retrieve_for_analysis(model):
+    if index is None:
+        return []
+    user_msgs = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    question = " ".join(user_msgs[-3:])  # الحالة قد تُشرح على أكثر من رسالة
+    queries = [question] + plan_queries(question, model)
+    return merge_hits([index.search(q, k=5) for q in queries], ANALYSIS_TOP_K)
 
 
 def format_context(hits) -> str:
@@ -314,7 +400,7 @@ def render_message(m, autoplay=False):
         if m.get("sources"):
             with st.expander(f"📚 المصادر ({len(m['sources'])})"):
                 for i, s in enumerate(m["sources"], 1):
-                    st.markdown(f"**[{i}] {s['source']} — {s['label']}** (تشابه: {s['score']:.1f})")
+                    st.markdown(f"**[{i}] {s['source']} — {s['label']}** (تطابق الكلمات {s.get('cov', 0):.0%} · درجة {s['score']:.1f})")
                     st.caption(s["text"][:400] + ("..." if len(s["text"]) > 400 else ""))
 
 
@@ -374,8 +460,15 @@ if chat_value:
 
     # 3) رد المساعد
     with st.spinner("جاري البحث في النصوص القانونية وإعداد الإجابة..."):
-        hits = retrieve()
-        llm_messages = build_llm_messages(format_context(hits), answer_mode)
+        if answer_mode == "تحليل حالة":
+            try:
+                hits = retrieve_for_analysis(get_chat_model(model_label))
+            except Exception:
+                hits = retrieve()
+        else:
+            hits = retrieve()
+        context_text = format_context(hits)
+        llm_messages = build_llm_messages(context_text, answer_mode)
         reply, used_model, errors = None, None, []
         for label in [model_label] + [m for m in CHAT_MODELS if m != model_label]:
             try:
@@ -388,6 +481,24 @@ if chat_value:
                 errors.append(f"{label} -> {type(e).__name__}: {str(e)[:400]}")
         if reply is None:
             reply = "عذرًا، حدث خطأ مؤقت. برجاء المحاولة مرة أخرى."
+        elif answer_mode != "تحليل حالة":
+            bad = unsupported_numbers(reply, context_text)
+            if bad:  # رقم غير موجود في المصادر: نطلب من النموذج تصحيحه مرة واحدة
+                try:
+                    fix = HumanMessage(content=(
+                        "تصحيح: الأرقام التالية لم ترد حرفيًا في النصوص المرجعية: " + "، ".join(bad)
+                        + ". أعد كتابة الإجابة كاملة دون أي رقم غير موجود في النصوص المرجعية، "
+                        "وإن لم تجد المعلومة فقل ذلك صراحة."))
+                    retry = strip_think(get_chat_model(used_model).invoke(
+                        llm_messages + [AIMessage(content=reply), fix]).content)
+                    if retry.strip():
+                        reply = retry
+                        bad = unsupported_numbers(reply, context_text)
+                except Exception as e:
+                    errors.append(f"number check retry -> {type(e).__name__}: {str(e)[:300]}")
+            if bad:
+                reply += ("\n\n⚠️ تنبيه: الأرقام التالية لم ترد في النصوص المرجعية ويجب التحقق منها "
+                          "من النص الرسمي: " + "، ".join(bad))
         audio_bytes = make_tts(reply) if read_aloud else None
 
     assistant_msg = {
@@ -395,7 +506,8 @@ if chat_value:
         "content": reply,
         "audio": audio_bytes,
         "sources": [
-            {"source": c["source"], "label": c["label"], "text": c["text"], "score": s}
+            {"source": c["source"], "label": c["label"], "text": c["text"], "score": s,
+             "cov": index.coverage(current_query(), c) if index else 0.0}
             for c, s in hits
         ],
     }

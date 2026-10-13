@@ -105,6 +105,15 @@ class Index:
         for d in docs:
             df.update(set(d))
         self.idf = {t: math.log(1 + (n - c + 0.5) / (c + 0.5)) for t, c in df.items()}
+        self.pos = {id(c): i for i, c in enumerate(chunks)}
+
+    def coverage(self, query: str, chunk) -> float:
+        """نسبة كلمات السؤال (المعروفة في القانون) الموجودة في هذا النص: 0 إلى 1."""
+        q = {t for t in tokenize(query) if t in self.idf}
+        if not q:
+            return 0.0
+        i = self.pos[id(chunk)]
+        return sum(1 for t in q if t in self.tf[i]) / len(q)
 
     def search(self, query: str, k: int = 4, min_score: float = MIN_SCORE):
         q = set(tokenize(query))
